@@ -337,24 +337,21 @@ async def _process_function_live_helper(
     # for streaming tool use case
     # we require the function to be a async generator function
     async def run_tool_and_update_queue(tool, function_args, tool_context):
-      try:
-        async for result in __call_tool_live(
-            tool=tool,
-            args=function_args,
-            tool_context=tool_context,
-            invocation_context=invocation_context,
-        ):
-          updated_content = types.Content(
-              role='user',
-              parts=[
-                  types.Part.from_text(
-                      text=f'Function {tool.name} returned: {result}'
-                  )
-              ],
-          )
-          invocation_context.live_request_queue.send_content(updated_content)
-      except asyncio.CancelledError:
-        raise  # Re-raise to properly propagate the cancellation
+      async for result in __call_tool_live(
+          tool=tool,
+          args=function_args,
+          tool_context=tool_context,
+          invocation_context=invocation_context,
+      ):
+        updated_content = types.Content(
+            role='user',
+            parts=[
+                types.Part.from_text(
+                    text=f'Function {tool.name} returned: {result}'
+                )
+            ],
+        )
+        invocation_context.live_request_queue.send_content(updated_content)
 
     task = asyncio.create_task(
         run_tool_and_update_queue(tool, function_args, tool_context)
