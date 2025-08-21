@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import inspect
 from typing import Any
 from typing import Callable
@@ -20,6 +22,7 @@ from typing import Optional
 from google.genai import types
 from typing_extensions import override
 
+from ..utils.context_utils import Aclosing
 from ._automatic_function_calling_util import build_function_declaration
 from .base_tool import BaseTool
 from .tool_context import ToolContext
@@ -46,14 +49,14 @@ class FunctionTool(BaseTool):
 
     # Get documentation (prioritize direct __doc__ if available)
     if hasattr(func, '__doc__') and func.__doc__:
-      doc = func.__doc__
+      doc = inspect.cleandoc(func.__doc__)
     elif (
         hasattr(func, '__call__')
         and hasattr(func.__call__, '__doc__')
         and func.__call__.__doc__
     ):
       # For callable objects, try to get docstring from __call__ method
-      doc = func.__call__.__doc__
+      doc = inspect.cleandoc(func.__call__.__doc__)
 
     super().__init__(name=name, description=doc)
     self.func = func
@@ -79,8 +82,12 @@ class FunctionTool(BaseTool):
   ) -> Any:
     args_to_call = args.copy()
     signature = inspect.signature(self.func)
-    if 'tool_context' in signature.parameters:
+    valid_params = {param for param in signature.parameters}
+    if 'tool_context' in valid_params:
       args_to_call['tool_context'] = tool_context
+
+    # Filter args_to_call to only include valid parameters for the function
+    args_to_call = {k: v for k, v in args_to_call.items() if k in valid_params}
 
     # Before invoking the function, we check for if the list of args passed in
     # has all the mandatory arguments or not.
@@ -130,8 +137,9 @@ You could retry calling this tool, but it is IMPORTANT for you to provide all th
       ].stream
     if 'tool_context' in signature.parameters:
       args_to_call['tool_context'] = tool_context
-    async for item in self.func(**args_to_call):
-      yield item
+    async with Aclosing(self.func(**args_to_call)) as agen:
+      async for item in agen:
+        yield item
 
   def _get_mandatory_args(
       self,

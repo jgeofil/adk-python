@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from google.adk.agents import Agent
-from google.adk.tools import ToolContext
+from google.adk.agents.llm_agent import Agent
+from google.adk.tools.tool_context import ToolContext
 from google.genai.types import Part
 from pydantic import BaseModel
 
@@ -44,3 +44,4 @@ def test_output_schema():
   assert len(mockModel.requests) == 1
   assert mockModel.requests[0].config.response_schema == CustomOutput
   assert mockModel.requests[0].config.response_mime_type == 'application/json'
+  assert mockModel.requests[0].config.labels == {'adk_agent_name': 'root_agent'}

@@ -17,23 +17,36 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 from typing import AsyncGenerator
+from typing import ClassVar
+from typing import Dict
+from typing import Type
 
 from typing_extensions import override
 
-from ..agents.invocation_context import InvocationContext
 from ..events.event import Event
+from ..utils.context_utils import Aclosing
 from .base_agent import BaseAgent
+from .base_agent_config import BaseAgentConfig
+from .invocation_context import InvocationContext
+from .parallel_agent_config import ParallelAgentConfig
 
 
-def _set_branch_for_current_agent(
-    current_agent: BaseAgent, invocation_context: InvocationContext
-):
+def _create_branch_ctx_for_sub_agent(
+    agent: BaseAgent,
+    sub_agent: BaseAgent,
+    invocation_context: InvocationContext,
+) -> InvocationContext:
+  """Create isolated branch for every sub-agent."""
+  invocation_context = invocation_context.model_copy()
+  branch_suffix = f'{agent.name}.{sub_agent.name}'
   invocation_context.branch = (
-      f"{invocation_context.branch}.{current_agent.name}"
+      f'{invocation_context.branch}.{branch_suffix}'
       if invocation_context.branch
-      else current_agent.name
+      else branch_suffix
   )
+  return invocation_context
 
 
 async def _merge_agent_run(
@@ -86,18 +99,27 @@ class ParallelAgent(BaseAgent):
   - Generating multiple responses for review by a subsequent evaluation agent.
   """
 
+  config_type: ClassVar[type[BaseAgentConfig]] = ParallelAgentConfig
+  """The config type for this agent."""
+
   @override
   async def _run_async_impl(
       self, ctx: InvocationContext
   ) -> AsyncGenerator[Event, None]:
-    _set_branch_for_current_agent(self, ctx)
-    agent_runs = [agent.run_async(ctx) for agent in self.sub_agents]
-    async for event in _merge_agent_run(agent_runs):
-      yield event
+    agent_runs = [
+        sub_agent.run_async(
+            _create_branch_ctx_for_sub_agent(self, sub_agent, ctx)
+        )
+        for sub_agent in self.sub_agents
+    ]
+
+    async with Aclosing(_merge_agent_run(agent_runs)) as agen:
+      async for event in agen:
+        yield event
 
   @override
   async def _run_live_impl(
       self, ctx: InvocationContext
   ) -> AsyncGenerator[Event, None]:
-    raise NotImplementedError("This is not supported yet for ParallelAgent.")
+    raise NotImplementedError('This is not supported yet for ParallelAgent.')
     yield  # AsyncGenerator requires having at least one yield statement

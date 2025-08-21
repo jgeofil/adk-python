@@ -15,7 +15,7 @@
 from google.adk.agents.llm_agent import Agent
 from google.adk.agents.loop_agent import LoopAgent
 from google.adk.agents.sequential_agent import SequentialAgent
-from google.adk.tools import exit_loop
+from google.adk.tools.exit_loop_tool import exit_loop
 from google.genai.types import Part
 
 from ... import testing_utils
@@ -28,7 +28,7 @@ def transfer_call_part(agent_name: str) -> Part:
 
 
 TRANSFER_RESPONSE_PART = Part.from_function_response(
-    name='transfer_to_agent', response={}
+    name='transfer_to_agent', response={'result': None}
 )
 
 
@@ -89,7 +89,7 @@ def test_auto_to_single():
       ('sub_agent_1', 'response1'),
   ]
 
-  # root_agent should still be the current agent, becaues sub_agent_1 is single.
+  # root_agent should still be the current agent, because sub_agent_1 is single.
   assert testing_utils.simplify_events(runner.run('test2')) == [
       ('root_agent', 'response2'),
   ]
@@ -140,7 +140,7 @@ def test_auto_to_auto_to_single():
 def test_auto_to_sequential():
   response = [
       transfer_call_part('sub_agent_1'),
-      # sub_agent_1 responds directly instead of transfering.
+      # sub_agent_1 responds directly instead of transferring.
       'response1',
       'response2',
       'response3',
@@ -189,7 +189,7 @@ def test_auto_to_sequential():
 def test_auto_to_sequential_to_auto():
   response = [
       transfer_call_part('sub_agent_1'),
-      # sub_agent_1 responds directly instead of transfering.
+      # sub_agent_1 responds directly instead of transferring.
       'response1',
       transfer_call_part('sub_agent_1_2_1'),
       'response2',
@@ -250,7 +250,7 @@ def test_auto_to_sequential_to_auto():
 def test_auto_to_loop():
   response = [
       transfer_call_part('sub_agent_1'),
-      # sub_agent_1 responds directly instead of transfering.
+      # sub_agent_1 responds directly instead of transferring.
       'response1',
       'response2',
       'response3',
@@ -299,13 +299,13 @@ def test_auto_to_loop():
       ('sub_agent_1_2', Part.from_function_call(name='exit_loop', args={})),
       (
           'sub_agent_1_2',
-          Part.from_function_response(name='exit_loop', response={}),
+          Part.from_function_response(
+              name='exit_loop', response={'result': None}
+          ),
       ),
-      # root_agent summarizes.
-      ('root_agent', 'response4'),
   ]
 
   # root_agent should still be the current agent because sub_agent_1 is loop.
   assert testing_utils.simplify_events(runner.run('test2')) == [
-      ('root_agent', 'response5'),
+      ('root_agent', 'response4'),
   ]
